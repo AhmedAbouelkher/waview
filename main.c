@@ -93,7 +93,7 @@ int main(int argc, char *argv[]) {
   }
 
   PlayMusicStream(music);
-  SetMusicVolume(music, 0.2f);
+  SetMusicVolume(music, 0.5f);
 
   AttachAudioStreamProcessor(music.stream, audioProcessorCallback);
 
