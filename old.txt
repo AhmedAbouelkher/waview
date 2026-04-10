@@ -1,0 +1,20 @@
+    if (0) {
+      float cellWidth = ceilf((float)w / m);
+      for (int i = 0; i < m; i++) {
+        float t = out_smooth_arr[i];
+        float hue = (float)i / m;
+        Color color = ColorFromHSV(hue * 360, .75f, 1);
+        // Adjust Y if you want it centered vertically
+        float radius = (cellWidth / 2) * sqrt(t);
+        Vector2 startPos = {
+            i * cellWidth - cellWidth / 2,
+            .y = h / 2 - (h * 2 / 3 * t) / 2,
+        };
+        Vector2 endPos = {
+            i * cellWidth - cellWidth / 2,
+            .y = h,
+        };
+        DrawLineEx(startPos, endPos, radius, color);
+        DrawCircle(startPos.x, startPos.y, radius / 2, color);
+      }
+    }
