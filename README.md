@@ -4,9 +4,13 @@ A simple, high-performance audio visualizer built with C and Raylib.
 
 > **Note**: This is a passion project and is currently a work in progress. I'm still figuring things out as I go!
 
+## V2 Preview (Latest)
+
+https://github.com/user-attachments/assets/f3ea5287-acdc-46e1-8847-e9f54917c250
+
 ## V1 Preview
 
-<https://github.com/user-attachments/assets/85f8772e-2d8e-4708-841b-8ba9e71560ec>
+https://github.com/user-attachments/assets/85f8772e-2d8e-4708-841b-8ba9e71560ec
 
 ## Features
 
