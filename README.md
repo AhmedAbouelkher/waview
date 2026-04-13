@@ -60,3 +60,20 @@ Run the executable and provide the path to an audio file:
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
+
+---
+
+## Sideprojects
+
+### [WAV Parser](./sideprojects/wav_parser)
+
+A lightweight, dependency-free C library for parsing and reading WAV audio files. This project provides a simple API to extract header information and read sample data as normalized floating-point values.
+
+#### Features
+
+- **Header Parsing**: Extract sample rate, channel count, bit depth, and more.
+- **Normalized Output**: Automatically converts 8-bit, 16-bit, and 32-bit PCM data to `float` (-1.0 to 1.0).
+- **Flexible Reading**:
+  - `readWaveFile_float`: Read the entire file at once.
+  - `readWaveFile_Cfloat`: Read data in chunks (useful for streaming or large files).
+- **Zero Dependencies**: Standard C library only.
