@@ -73,6 +73,12 @@ int openWaveFile(char *waveFilePath, WaveFileHeader *header) {
     } else if (memcmp(id, "data", 4) == 0) {
       header->dataChunkSize = size;
       header->numberOfSamples = size / header->blockAlign;
+
+      if (header->fmtChunkSize == 0) {
+        printf(
+            "Audio file is corrupted, retrieved data without the fmt first\n");
+        goto end;
+      }
       break;
     } else {
       // skip unsupported chunk

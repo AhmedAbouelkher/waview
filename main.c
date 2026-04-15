@@ -23,7 +23,7 @@ float global_currentVolume = 0.3f;
 #endif
 
 enum ViewMode { VIEWMODE_RADIAL, VIEW_MODE_HORIZONTAL };
-enum ViewMode global_currentViewMode = VIEW_MODE_HORIZONTAL;
+enum ViewMode global_currentViewMode = VIEWMODE_RADIAL;
 
 float amp(float complex z) { return log10f(1.f + cabs(z) * 9.f); }
 
@@ -105,6 +105,18 @@ void audioProcessorCallback(void *bufferData, unsigned int frames) {
   fft(in_arr, 1, out_raw_arr, N);
 }
 
+void startFreshAndPlay(Music music) {
+  memset(in_arr, 0, sizeof(in_arr));
+  memset(out_raw_arr, 0, sizeof(out_raw_arr));
+  memset(out_arr, 0, sizeof(out_arr));
+  memset(out_smooth_arr, 0, sizeof(out_smooth_arr));
+
+  music.looping = true;
+  PlayMusicStream(music);
+  SetMusicVolume(music, global_currentVolume);
+  AttachAudioStreamProcessor(music.stream, audioProcessorCallback);
+}
+
 // MARK:- UI Helpers
 void formatTime(float time, char *formattedTime, size_t bufSize) {
   int minutes = (int)time / 60;
@@ -114,12 +126,11 @@ void formatTime(float time, char *formattedTime, size_t bufSize) {
 
 // MARK:- main
 int main(int argc, char *argv[]) {
-  if (argc != 2) {
-    printf("You should provide the file path\n");
-    return -1;
+  char *filePath = NULL;
+  if (argc > 1) {
+    filePath = argv[1];
+    printf("Playing the audio file: %s\n", filePath);
   }
-  char *filePath = argv[1];
-  printf("Playing the audio file: %s\n", filePath);
 
   // SetTraceLogLevel(LOG_DEBUG | LOG_FATAL | LOG_ERROR);
   SetConfigFlags(FLAG_MSAA_4X_HINT);
@@ -127,20 +138,37 @@ int main(int argc, char *argv[]) {
   SetTargetFPS(60);
 
   InitAudioDevice();
-  Music music = LoadMusicStream(filePath);
+  Music music = {0};
 
-  if (!IsMusicValid(music)) {
-    printf("Music file was not valid for some reason\n");
-    return -1;
+  if (filePath != NULL) {
+    music = LoadMusicStream(filePath);
+    if (IsMusicValid(music)) {
+      startFreshAndPlay(music);
+    }
   }
-  music.looping = true;
-  PlayMusicStream(music);
-  SetMusicVolume(music, global_currentVolume);
-
-  AttachAudioStreamProcessor(music.stream, audioProcessorCallback);
 
   while (!WindowShouldClose()) {
-    UpdateMusicStream(music);
+    if (IsFileDropped()) {
+      FilePathList droppedFiles = LoadDroppedFiles();
+      if (droppedFiles.count > 0) {
+        if (IsMusicValid(music)) {
+          StopMusicStream(music);
+          DetachAudioStreamProcessor(music.stream, audioProcessorCallback);
+          UnloadMusicStream(music);
+        }
+
+        music = LoadMusicStream(droppedFiles.paths[0]);
+        if (IsMusicValid(music)) {
+          startFreshAndPlay(music);
+          printf("Playing: %s\n", droppedFiles.paths[0]);
+        }
+      }
+      UnloadDroppedFiles(droppedFiles);
+    }
+
+    if (IsMusicValid(music)) {
+      UpdateMusicStream(music);
+    }
 
     float w = GetScreenWidth();
     float h = GetScreenHeight();
@@ -310,31 +338,35 @@ int main(int argc, char *argv[]) {
                padding + i * (legendFontSize + 5), legendFontSize, GRAY);
     }
 
-    char timePlayed[64];
-    char timeLength[64];
-    formatTime(GetMusicTimeLength(music), timeLength, 64);
-    formatTime(GetMusicTimePlayed(music), timePlayed, 64);
-    DrawText(TextFormat("%s/%s", timePlayed, timeLength), 10, 10, fontSize,
-             WHITE);
+    if (IsMusicValid(music)) {
+      char timePlayed[64];
+      char timeLength[64];
+      formatTime(GetMusicTimeLength(music), timeLength, 64);
+      formatTime(GetMusicTimePlayed(music), timePlayed, 64);
+      DrawText(TextFormat("%s/%s", timePlayed, timeLength), 10, 10, fontSize,
+               WHITE);
 
-    char *playingStatus;
-    Color statusColor;
-    if (IsMusicStreamPlaying(music)) {
-      playingStatus = "Playing";
-      statusColor = GREEN;
-    } else {
-      playingStatus = "Paused";
-      statusColor = ORANGE;
-    }
-    DrawText(playingStatus, 10, 35, fontSize, statusColor);
+      char *playingStatus;
+      Color statusColor;
+      if (IsMusicStreamPlaying(music)) {
+        playingStatus = "Playing";
+        statusColor = GREEN;
+      } else {
+        playingStatus = "Paused";
+        statusColor = ORANGE;
+      }
+      DrawText(playingStatus, 10, 35, fontSize, statusColor);
 
-    if (global_isSoundMuted) {
-      char *mutedStatus = "Muted";
-      DrawText(mutedStatus, 10, 65, fontSize, RED);
+      if (global_isSoundMuted) {
+        char *mutedStatus = "Muted";
+        DrawText(mutedStatus, 10, 65, fontSize, RED);
+      } else {
+        const char *volumeLevel =
+            TextFormat("Volume: %d", (int)roundf(global_currentVolume * 100));
+        DrawText(volumeLevel, 10, 65, fontSize, ORANGE);
+      }
     } else {
-      const char *volumeLevel =
-          TextFormat("Volume: %d", (int)roundf(global_currentVolume * 100));
-      DrawText(volumeLevel, 10, 65, fontSize, ORANGE);
+      DrawText("Drag and drop a music file to start", 10, 10, fontSize, GRAY);
     }
 
     // >> END: DRAW PLAYER CONTROLS <<

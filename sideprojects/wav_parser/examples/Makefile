@@ -8,3 +8,11 @@ read_all:
 read_chunks:
 	rm -f ply_rc_wav_parser
 	gcc $(CFLAGS) -o ply_rc_wav_parser -DWAV_DEBUG read_chunks.c ../wave.c $(LDLIBS)
+
+decode_encode:
+	rm -f ply_de_wav_parser
+	gcc $(CFLAGS) -o ply_de_wav_parser decode_encode.c ../wave.c $(LDLIBS)
+
+decode_encode_sanity:
+	rm -f ply_de_wav_parser
+	gcc $(CFLAGS) -o ply_de_wav_parser decode_encode.c ../wave.c $(LDLIBS)

@@ -75,6 +75,12 @@ int main(int argc, char *argv[]) {
       return -1;
     }
 
+    printf("  fileInfo.channels: %d\n", fileInfo.channels);
+    printf("  fileInfo.samplerate: %d\n", fileInfo.samplerate);
+    printf("  fileInfo.format: %d\n", fileInfo.format);
+    printf("  fileInfo.sections: %d\n", fileInfo.sections);
+    printf("  fileInfo.seekable: %d\n", fileInfo.seekable);
+
     size_t dataArrSize = fileInfo.frames * sizeof(float);
     float *dataArr = malloc(dataArrSize);
 
