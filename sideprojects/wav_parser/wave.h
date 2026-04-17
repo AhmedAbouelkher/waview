@@ -73,6 +73,19 @@ size_t readWaveFile_float(WaveFileHeader *header, float *ptr);
 size_t readWaveFile_Cfloat(WaveFileHeader *header, float *ptr, uint32_t frames);
 
 /**
+ * @brief Reads a chunk of sample data (up to 'frames' frames) from a WAV file
+ * and converts it to normalized integer values.
+ *
+ * @param header Pointer to an already populated WaveFileHeader structure
+ * representing the open WAV file.
+ * @param ptr Pointer to a pre-allocated int array with space for at least
+ * 'frames' elements.
+ * @param frames The number of frames to read and convert.
+ * @return Returns frames read count on success, or a negative integer on error.
+ */
+size_t readWaveFile_CInt(WaveFileHeader *header, int *ptr, uint32_t frames);
+
+/**
  * @brief Closes the open WAV file associated with the provided header.
  *
  * @param header Pointer to the WaveFileHeader structure containing the open

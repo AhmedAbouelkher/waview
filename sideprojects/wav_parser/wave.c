@@ -221,6 +221,62 @@ clean_and_exit:
   return ret;
 }
 
+size_t readWaveFile_CInt(WaveFileHeader *header, int *ptr, uint32_t frames) {
+  if (ptr == NULL) {
+    printf("An allocated float array is required\n");
+    return 1;
+  }
+  size_t ret = -1;
+
+  // Calculate remaining bytes in the data chunk
+  uint32_t remainingBytes = header->dataChunkSize - header->currentDataOffset;
+  uint32_t reqNumOfSamples = frames * header->numOfChannels;
+  uint32_t reqChunkSize = reqNumOfSamples * header->bytesPerSample;
+  // Clamp request to file boundaries
+  if (reqChunkSize > remainingBytes) {
+    reqChunkSize = remainingBytes;
+    frames = reqChunkSize / (header->numOfChannels * header->bytesPerSample);
+    reqNumOfSamples = frames * header->numOfChannels;
+  }
+
+  if (remainingBytes <= 0) {
+    ret = 0;
+    goto clean_and_exit;
+  }
+
+#ifdef WAV_DEBUG
+  printf("  remainingBytes: %d\n", remainingBytes);
+  printf("  frames: %d\n", frames);
+  printf("  reqNumOfSamples: %d\n", reqNumOfSamples);
+  printf("  reqChunkSize: %d\n", reqChunkSize);
+#endif
+
+  size_t bytesRead = fread(ptr, 1, reqChunkSize, header->file);
+
+#ifdef WAV_DEBUG
+  printf("  File READ BYTES: %zu\n", bytesRead);
+#endif
+
+  if (bytesRead <= 0) {
+    printf(
+        "Failed to read chunk size: %d [%d frames] from the file due to %s\n",
+        reqChunkSize, frames, strerror(errno));
+    goto clean_and_exit;
+  }
+
+  header->currentDataOffset += reqChunkSize;
+  ret = frames;
+
+  remainingBytes = header->dataChunkSize - header->currentDataOffset;
+
+#ifdef WAV_DEBUG
+  printf("  AFT: remainingBytes %d\n", remainingBytes);
+#endif
+
+clean_and_exit:
+  return ret;
+}
+
 void closeFile(const WaveFileHeader *header) { fclose(header->file); }
 
 void printWaveInfo(const WaveFileHeader *header) {
