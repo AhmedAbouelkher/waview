@@ -14,11 +14,8 @@ build:
 	mkdir -p $(BUILD_DIR)
 	gcc -o $(BUILD_DIR)/waview main.c $$(pkg-config --cflags --libs raylib)
 
-macos:
-	rm -rf $(APP_BUNDLE)
-	mkdir -p $(MACOS) $(RESOURCES)
-	clang -o $(MACOS)/waview main.c $$(pkg-config --cflags raylib) $(RAYLIB_STATIC) $(FRAMEWORKS)
-	cp Info.plist.template $(CONTENTS)/Info.plist
+build-brew: clean	
+	gcc -o waview main.c $$(/opt/homebrew/bin/pkg-config --cflags --libs raylib)
 
 clean:
 	rm -f $(BUILD_DIR)/waview
