@@ -7,6 +7,10 @@
 
 #include "raylib.h"
 
+#if defined(PLATFORM_WEB)
+#include <emscripten/emscripten.h>
+#endif
+
 #define NUM_OF_CHANNELS 2
 #define N (1 << 9)
 
@@ -14,6 +18,8 @@ float in_arr[N] = {0};
 float complex out_raw_arr[N] = {0};
 float out_arr[N] = {0};
 float out_smooth_arr[N];
+
+Music music = {0};
 
 bool global_isSoundMuted = false;
 #ifdef global_isSoundMuted
@@ -124,6 +130,8 @@ void formatTime(float time, char *formattedTime, size_t bufSize) {
   snprintf(formattedTime, bufSize, "%02d:%02d", minutes, seconds);
 }
 
+static void UpdateDrawFrame(void); // Update and draw one frame
+
 // MARK:- main
 int main(int argc, char *argv[]) {
   char *filePath = NULL;
@@ -135,10 +143,8 @@ int main(int argc, char *argv[]) {
   // SetTraceLogLevel(LOG_DEBUG | LOG_FATAL | LOG_ERROR);
   SetConfigFlags(FLAG_MSAA_4X_HINT);
   InitWindow(1200, 900, "Waview");
-  SetTargetFPS(60);
 
   InitAudioDevice();
-  Music music = {0};
 
   if (filePath != NULL) {
     music = LoadMusicStream(filePath);
@@ -153,233 +159,243 @@ int main(int argc, char *argv[]) {
     printf("Music is valid and playing\n");
   }
 
-  while (!WindowShouldClose()) {
-    if (IsFileDropped()) {
-      FilePathList droppedFiles = LoadDroppedFiles();
-      if (droppedFiles.count > 0) {
-        if (IsMusicValid(music)) {
-          StopMusicStream(music);
-          DetachAudioStreamProcessor(music.stream, audioProcessorCallback);
-          UnloadMusicStream(music);
-        }
+#if defined(PLATFORM_WEB)
+  emscripten_set_main_loop(UpdateDrawFrame, 0, 1);
+#else
+  SetTargetFPS(60); // Set our game to run at 60 frames-per-second
+  //--------------------------------------------------------------------------------------
 
-        music = LoadMusicStream(droppedFiles.paths[0]);
-        if (IsMusicValid(music)) {
-          startFreshAndPlay(music);
-          printf("Playing: %s\n", droppedFiles.paths[0]);
-        }
-      }
-      UnloadDroppedFiles(droppedFiles);
-    }
-
-    if (IsMusicValid(music)) {
-      UpdateMusicStream(music);
-    }
-
-    float w = GetScreenWidth();
-    float h = GetScreenHeight();
-    float dt = GetFrameTime();
-
-    if (IsKeyPressed(KEY_Q)) {
-      goto end;
-    } else if (IsKeyPressed(KEY_SPACE)) {
-      if (IsMusicStreamPlaying(music)) {
-        PauseMusicStream(music);
-      } else {
-        ResumeMusicStream(music);
-      }
-    } else if (IsKeyPressed(KEY_M)) {
-      global_isSoundMuted = !global_isSoundMuted;
-      if (global_isSoundMuted) {
-        SetMusicVolume(music, 0);
-      } else {
-        SetMusicVolume(music, global_currentVolume);
-      }
-    } else if (IsKeyPressed(KEY_UP)) {
-      global_currentVolume += .05;
-      SetMusicVolume(music, global_currentVolume);
-      if (global_currentVolume >= .05) {
-        global_isSoundMuted = false;
-      }
-    } else if (IsKeyPressed(KEY_DOWN)) {
-      global_currentVolume -= .05;
-      SetMusicVolume(music, global_currentVolume);
-      if (global_currentVolume <= .05) {
-        global_isSoundMuted = true;
-      }
-    } else if (IsKeyPressed(KEY_RIGHT)) {
-      float current = GetMusicTimePlayed(music);
-      SeekMusicStream(music, current += 5);
-    } else if (IsKeyPressed(KEY_LEFT)) {
-      float current = GetMusicTimePlayed(music);
-      if (current >= 5) {
-        SeekMusicStream(music, current -= 5);
-      }
-    } else if (IsKeyPressed(KEY_L)) {
-      switch (global_currentViewMode) {
-      case VIEW_MODE_HORIZONTAL:
-        global_currentViewMode = VIEWMODE_RADIAL;
-        break;
-      case VIEWMODE_RADIAL:
-        global_currentViewMode = VIEW_MODE_HORIZONTAL;
-        break;
-      }
-    }
-
-    BeginDrawing();
-
-    ClearBackground(BLACK);
-
-    // >> START: DRAW VISUALS <<
-    size_t m = 0;
-    const float stepSize = 1.01;
-    float lowf = 3.0f;
-    float maxAmp = 1.0f;
-    int n = N / (2 * 3);
-    for (float f = lowf; (size_t)f < n; f = ceilf(f * stepSize)) {
-      float f1 = ceilf(f * stepSize);
-      float a = 0.0f;
-      for (size_t q = (size_t)f; q < n && q < (size_t)f1; ++q) {
-        float b = amp(out_raw_arr[q]);
-        if (b > a)
-          a = b;
-      }
-      if (maxAmp < a)
-        maxAmp = a;
-      out_arr[m++] = a;
-    }
-    for (size_t i = 0; i < m; ++i) {
-      out_arr[i] /= maxAmp;
-    }
-    for (int i = 0; i < m; i++) {
-      out_smooth_arr[i] += (out_arr[i] - out_smooth_arr[i]) * 4 * dt;
-    }
-
-    if (global_currentViewMode == VIEW_MODE_HORIZONTAL) {
-      float cellWidth = ceilf((float)w / m);
-
-      for (int i = 0; i < m; i++) {
-        // float t = out_smooth_arr[i];
-        float progress = (float)i / m;
-        float weight = 1.0f + (progress * progress * (3 - 2 * progress)) * 1.2f;
-        float t = out_smooth_arr[i] * weight;
-
-        float hue = (float)i / m;
-        Color color = ColorFromHSV(hue * 360, .75f, 1);
-        // Adjust Y if you want it centered vertically
-        float radius = (cellWidth / 2) * sqrt(t);
-        // Compute maximum bar height as half the screen height
-        float maxBarHeight = h / 2.0f;
-        float barHeight = maxBarHeight * t;
-
-        Vector2 startPos = {
-            i * cellWidth - cellWidth / 2,
-            .y = h / 2 - barHeight / 2,
-        };
-        Vector2 endPos = {
-            i * cellWidth - cellWidth / 2,
-            .y = h / 2 + barHeight / 2,
-        };
-        DrawLineEx(startPos, endPos, radius, color);
-      }
-    } else if (global_currentViewMode == VIEWMODE_RADIAL) {
-
-      Vector2 center = {w / 2, h / 2};
-
-      static float rotation = 0;
-      if (IsMusicStreamPlaying(music)) {
-        rotation += 10.f * dt;
-      }
-
-      // Use the first frequency bin (bass) to drive the radius
-      float bigCircleRadius = 40.0f + (out_smooth_arr[0] * 20.0f);
-
-      float baseRadius = (w * 2 / 5) - bigCircleRadius;
-      float baseAngle = 360.0f / m;
-      float maxOuterRadius = baseRadius - bigCircleRadius;
-
-      float thickness = ceilf((3.f * PI * bigCircleRadius / m) * 1.5f);
-
-      for (int i = 0; i < m; i++) {
-        float progress = (float)i / m;
-        float weight = 1.0f + (progress * progress * (3 - 2 * progress)) * 1.2f;
-        float t = out_smooth_arr[i] * weight;
-
-        float hue = (float)i / m;
-
-        float angle = baseAngle * i + rotation;
-        Vector2 dir = {cosf(angle * DEG2RAD), sinf(-angle * DEG2RAD)};
-        Vector2 endPos = {
-            center.x + dir.x * (bigCircleRadius + t * maxOuterRadius),
-            center.y + dir.y * (bigCircleRadius + t * maxOuterRadius)};
-
-        Color color = ColorFromHSV(hue * 360, .75f, easeOutQuad(t));
-        DrawLineEx(center, endPos, thickness / 3, color);
-        DrawCircleV(endPos, thickness / 1.5, color);
-      }
-      DrawCircleV(center, bigCircleRadius, WHITE);
-    } else {
-      printf("View mode is not supported\n");
-    }
-
-    // >> END: DRAW VISUALS <<
-
-    // >> START: DRAW PLAYER CONTROLS <<
-
-    const float fontSize = 25;
-
-    // Keyboard shortcuts legend (top right)
-    const char *shortcuts[] = {"[SPACE] Play/Pause", "[M] Mute/Unmute",
-                               "[UP/DOWN] Vol +/-",  "[LEFT/RIGHT] Seek",
-                               "[L] View Mode",      "[Q] Quit"};
-    int numShortcuts = sizeof(shortcuts) / sizeof(shortcuts[0]);
-    int legendFontSize = 20;
-    int padding = 10;
-    for (int i = 0; i < numShortcuts; i++) {
-      int textWidth = MeasureText(shortcuts[i], legendFontSize);
-      DrawText(shortcuts[i], w - textWidth - padding,
-               padding + i * (legendFontSize + 5), legendFontSize, GRAY);
-    }
-
-    if (IsMusicValid(music)) {
-      char timePlayed[64];
-      char timeLength[64];
-      formatTime(GetMusicTimeLength(music), timeLength, 64);
-      formatTime(GetMusicTimePlayed(music), timePlayed, 64);
-      DrawText(TextFormat("%s/%s", timePlayed, timeLength), 10, 10, fontSize,
-               WHITE);
-
-      char *playingStatus;
-      Color statusColor;
-      if (IsMusicStreamPlaying(music)) {
-        playingStatus = "Playing";
-        statusColor = GREEN;
-      } else {
-        playingStatus = "Paused";
-        statusColor = ORANGE;
-      }
-      DrawText(playingStatus, 10, 35, fontSize, statusColor);
-
-      if (global_isSoundMuted) {
-        char *mutedStatus = "Muted";
-        DrawText(mutedStatus, 10, 65, fontSize, RED);
-      } else {
-        const char *volumeLevel =
-            TextFormat("Volume: %d", (int)roundf(global_currentVolume * 100));
-        DrawText(volumeLevel, 10, 65, fontSize, ORANGE);
-      }
-    } else {
-      DrawText("Drag and drop a music file to start", 10, 10, fontSize, GRAY);
-    }
-
-    // >> END: DRAW PLAYER CONTROLS <<
-
-    EndDrawing();
+  // Main game loop
+  while (!WindowShouldClose()) // Detect window close button or ESC key
+  {
+    UpdateDrawFrame();
   }
+#endif
 
-end:
   CloseAudioDevice();
   CloseWindow();
 
   return 0;
+}
+
+static void UpdateDrawFrame(void) {
+  if (IsFileDropped()) {
+    FilePathList droppedFiles = LoadDroppedFiles();
+    if (droppedFiles.count > 0) {
+      if (IsMusicValid(music)) {
+        StopMusicStream(music);
+        DetachAudioStreamProcessor(music.stream, audioProcessorCallback);
+        UnloadMusicStream(music);
+      }
+
+      music = LoadMusicStream(droppedFiles.paths[0]);
+      if (IsMusicValid(music)) {
+        startFreshAndPlay(music);
+        printf("Playing: %s\n", droppedFiles.paths[0]);
+      }
+    }
+    UnloadDroppedFiles(droppedFiles);
+  }
+
+  if (IsMusicValid(music)) {
+    UpdateMusicStream(music);
+  }
+
+  float w = GetScreenWidth();
+  float h = GetScreenHeight();
+  float dt = GetFrameTime();
+
+  if (IsKeyPressed(KEY_SPACE)) {
+    if (IsMusicStreamPlaying(music)) {
+      PauseMusicStream(music);
+    } else {
+      ResumeMusicStream(music);
+    }
+  } else if (IsKeyPressed(KEY_M)) {
+    global_isSoundMuted = !global_isSoundMuted;
+    if (global_isSoundMuted) {
+      SetMusicVolume(music, 0);
+    } else {
+      SetMusicVolume(music, global_currentVolume);
+    }
+  } else if (IsKeyPressed(KEY_UP)) {
+    global_currentVolume += .05;
+    SetMusicVolume(music, global_currentVolume);
+    if (global_currentVolume >= .05) {
+      global_isSoundMuted = false;
+    }
+  } else if (IsKeyPressed(KEY_DOWN)) {
+    global_currentVolume -= .05;
+    SetMusicVolume(music, global_currentVolume);
+    if (global_currentVolume <= .05) {
+      global_isSoundMuted = true;
+    }
+  } else if (IsKeyPressed(KEY_RIGHT)) {
+    float current = GetMusicTimePlayed(music);
+    SeekMusicStream(music, current += 5);
+  } else if (IsKeyPressed(KEY_LEFT)) {
+    float current = GetMusicTimePlayed(music);
+    if (current >= 5) {
+      SeekMusicStream(music, current -= 5);
+    }
+  } else if (IsKeyPressed(KEY_L)) {
+    switch (global_currentViewMode) {
+    case VIEW_MODE_HORIZONTAL:
+      global_currentViewMode = VIEWMODE_RADIAL;
+      break;
+    case VIEWMODE_RADIAL:
+      global_currentViewMode = VIEW_MODE_HORIZONTAL;
+      break;
+    }
+  }
+
+  BeginDrawing();
+
+  ClearBackground(BLACK);
+
+  // >> START: DRAW VISUALS <<
+  size_t m = 0;
+  const float stepSize = 1.01;
+  float lowf = 3.0f;
+  float maxAmp = 1.0f;
+  int n = N / (2 * 3);
+  for (float f = lowf; (size_t)f < n; f = ceilf(f * stepSize)) {
+    float f1 = ceilf(f * stepSize);
+    float a = 0.0f;
+    for (size_t q = (size_t)f; q < n && q < (size_t)f1; ++q) {
+      float b = amp(out_raw_arr[q]);
+      if (b > a)
+        a = b;
+    }
+    if (maxAmp < a)
+      maxAmp = a;
+    out_arr[m++] = a;
+  }
+  for (size_t i = 0; i < m; ++i) {
+    out_arr[i] /= maxAmp;
+  }
+  for (int i = 0; i < m; i++) {
+    out_smooth_arr[i] += (out_arr[i] - out_smooth_arr[i]) * 4 * dt;
+  }
+
+  if (global_currentViewMode == VIEW_MODE_HORIZONTAL) {
+    float cellWidth = ceilf((float)w / m);
+
+    for (int i = 0; i < m; i++) {
+      // float t = out_smooth_arr[i];
+      float progress = (float)i / m;
+      float weight = 1.0f + (progress * progress * (3 - 2 * progress)) * 1.2f;
+      float t = out_smooth_arr[i] * weight;
+
+      float hue = (float)i / m;
+      Color color = ColorFromHSV(hue * 360, .75f, 1);
+      // Adjust Y if you want it centered vertically
+      float radius = (cellWidth / 2) * sqrt(t);
+      // Compute maximum bar height as half the screen height
+      float maxBarHeight = h / 2.0f;
+      float barHeight = maxBarHeight * t;
+
+      Vector2 startPos = {
+          i * cellWidth - cellWidth / 2,
+          .y = h / 2 - barHeight / 2,
+      };
+      Vector2 endPos = {
+          i * cellWidth - cellWidth / 2,
+          .y = h / 2 + barHeight / 2,
+      };
+      DrawLineEx(startPos, endPos, radius, color);
+    }
+  } else if (global_currentViewMode == VIEWMODE_RADIAL) {
+
+    Vector2 center = {w / 2, h / 2};
+
+    static float rotation = 0;
+    if (IsMusicStreamPlaying(music)) {
+      rotation += 10.f * dt;
+    }
+
+    // Use the first frequency bin (bass) to drive the radius
+    float bigCircleRadius = 40.0f + (out_smooth_arr[0] * 20.0f);
+
+    float baseRadius = (w * 2 / 5) - bigCircleRadius;
+    float baseAngle = 360.0f / m;
+    float maxOuterRadius = baseRadius - bigCircleRadius;
+
+    float thickness = ceilf((3.f * PI * bigCircleRadius / m) * 1.5f);
+
+    for (int i = 0; i < m; i++) {
+      float progress = (float)i / m;
+      float weight = 1.0f + (progress * progress * (3 - 2 * progress)) * 1.2f;
+      float t = out_smooth_arr[i] * weight;
+
+      float hue = (float)i / m;
+
+      float angle = baseAngle * i + rotation;
+      Vector2 dir = {cosf(angle * DEG2RAD), sinf(-angle * DEG2RAD)};
+      Vector2 endPos = {
+          center.x + dir.x * (bigCircleRadius + t * maxOuterRadius),
+          center.y + dir.y * (bigCircleRadius + t * maxOuterRadius)};
+
+      Color color = ColorFromHSV(hue * 360, .75f, easeOutQuad(t));
+      DrawLineEx(center, endPos, thickness / 3, color);
+      DrawCircleV(endPos, thickness / 1.5, color);
+    }
+    DrawCircleV(center, bigCircleRadius, WHITE);
+  } else {
+    printf("View mode is not supported\n");
+  }
+
+  // >> END: DRAW VISUALS <<
+
+  // >> START: DRAW PLAYER CONTROLS <<
+
+  const float fontSize = 25;
+
+  // Keyboard shortcuts legend (top right)
+  const char *shortcuts[] = {"[SPACE] Play/Pause", "[M] Mute/Unmute",
+                             "[UP/DOWN] Vol +/-",  "[LEFT/RIGHT] Seek",
+                             "[L] View Mode",      "[Q] Quit"};
+  int numShortcuts = sizeof(shortcuts) / sizeof(shortcuts[0]);
+  int legendFontSize = 20;
+  int padding = 10;
+  for (int i = 0; i < numShortcuts; i++) {
+    int textWidth = MeasureText(shortcuts[i], legendFontSize);
+    DrawText(shortcuts[i], w - textWidth - padding,
+             padding + i * (legendFontSize + 5), legendFontSize, GRAY);
+  }
+
+  if (IsMusicValid(music)) {
+    char timePlayed[64];
+    char timeLength[64];
+    formatTime(GetMusicTimeLength(music), timeLength, 64);
+    formatTime(GetMusicTimePlayed(music), timePlayed, 64);
+    DrawText(TextFormat("%s/%s", timePlayed, timeLength), 10, 10, fontSize,
+             WHITE);
+
+    char *playingStatus;
+    Color statusColor;
+    if (IsMusicStreamPlaying(music)) {
+      playingStatus = "Playing";
+      statusColor = GREEN;
+    } else {
+      playingStatus = "Paused";
+      statusColor = ORANGE;
+    }
+    DrawText(playingStatus, 10, 35, fontSize, statusColor);
+
+    if (global_isSoundMuted) {
+      char *mutedStatus = "Muted";
+      DrawText(mutedStatus, 10, 65, fontSize, RED);
+    } else {
+      const char *volumeLevel =
+          TextFormat("Volume: %d", (int)roundf(global_currentVolume * 100));
+      DrawText(volumeLevel, 10, 65, fontSize, ORANGE);
+    }
+  } else {
+    DrawText("Drag and drop a music file to start", 10, 10, fontSize, GRAY);
+  }
+
+  // >> END: DRAW PLAYER CONTROLS <<
+
+  EndDrawing();
 }
