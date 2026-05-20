@@ -4,6 +4,10 @@ A simple, high-performance audio visualizer built with C and Raylib.
 
 > **Note**: This is a passion project and is currently a work in progress. I'm still figuring things out as I go!
 
+## [TRY THE DEMO IN YOUR BROWSER](https://github.com/AhmedAbouelkher/waview)
+
+For the best experience, download and [build the project locally](#build).
+
 ## V2 Preview (Latest)
 
 <https://github.com/user-attachments/assets/f3ea5287-acdc-46e1-8847-e9f54917c250>
