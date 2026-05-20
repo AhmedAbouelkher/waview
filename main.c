@@ -142,9 +142,15 @@ int main(int argc, char *argv[]) {
 
   if (filePath != NULL) {
     music = LoadMusicStream(filePath);
-    if (IsMusicValid(music)) {
-      startFreshAndPlay(music);
-    }
+  }
+
+#if defined(PLATFORM_WEB)
+  music = LoadMusicStream("resources/alexgrohl-energetic-action-sport.mp3");
+#endif
+
+  if (IsMusicValid(music)) {
+    startFreshAndPlay(music);
+    printf("Music is valid and playing\n");
   }
 
   while (!WindowShouldClose()) {
@@ -299,13 +305,10 @@ int main(int argc, char *argv[]) {
         float weight = 1.0f + (progress * progress * (3 - 2 * progress)) * 1.2f;
         float t = out_smooth_arr[i] * weight;
 
-        float r = baseRadius * t;
         float hue = (float)i / m;
 
         float angle = baseAngle * i + rotation;
         Vector2 dir = {cosf(angle * DEG2RAD), sinf(-angle * DEG2RAD)};
-        Vector2 startPos = {center.x + dir.x * bigCircleRadius,
-                            center.y + dir.y * bigCircleRadius};
         Vector2 endPos = {
             center.x + dir.x * (bigCircleRadius + t * maxOuterRadius),
             center.y + dir.y * (bigCircleRadius + t * maxOuterRadius)};
