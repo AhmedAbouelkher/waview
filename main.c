@@ -428,7 +428,7 @@ static void UpdateDrawFrame(void) {
   }
 
 #if defined(PLATFORM_WEB)
-  const float btnH = 30;
+  const float btnH = 50;
   const float btnW = 140;
   const float gap = 8;
   const float startX = 10;
