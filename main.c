@@ -7,6 +7,9 @@
 
 #include "raylib.h"
 
+#define RAYGUI_IMPLEMENTATION
+#include "./libs/raygui/src/raygui.h"
+
 #if defined(PLATFORM_WEB)
 #include <emscripten/emscripten.h>
 #endif
@@ -30,6 +33,16 @@ float global_currentVolume = 0.3f;
 
 enum ViewMode { VIEWMODE_RADIAL, VIEW_MODE_HORIZONTAL };
 enum ViewMode global_currentViewMode = VIEWMODE_RADIAL;
+
+typedef enum {
+  CONTROL_PLAY_PAUSE,
+  CONTROL_MUTE,
+  CONTROL_VOL_UP,
+  CONTROL_VOL_DOWN,
+  CONTROL_SEEK_BACK,
+  CONTROL_SEEK_FORWARD,
+  CONTROL_TOGGLE_VIEW,
+} ControlAction;
 
 float amp(float complex z) { return log10f(1.f + cabs(z) * 9.f); }
 
@@ -130,6 +143,49 @@ void formatTime(float time, char *formattedTime, size_t bufSize) {
   snprintf(formattedTime, bufSize, "%02d:%02d", minutes, seconds);
 }
 
+void handleControlAction(ControlAction action) {
+  if (!IsMusicValid(music))
+    return;
+
+  switch (action) {
+  case CONTROL_PLAY_PAUSE:
+    if (IsMusicStreamPlaying(music)) {
+      PauseMusicStream(music);
+    } else {
+      ResumeMusicStream(music);
+    }
+    break;
+  case CONTROL_MUTE:
+    global_isSoundMuted = !global_isSoundMuted;
+    SetMusicVolume(music, global_isSoundMuted ? 0 : global_currentVolume);
+    break;
+  case CONTROL_VOL_UP:
+    global_currentVolume = fminf(1.0f, global_currentVolume + 0.05f);
+    global_isSoundMuted = global_currentVolume < 0.05f;
+    SetMusicVolume(music, global_currentVolume);
+    break;
+  case CONTROL_VOL_DOWN:
+    global_currentVolume = fmaxf(0.0f, global_currentVolume - 0.05f);
+    global_isSoundMuted = global_currentVolume < 0.05f;
+    SetMusicVolume(music, global_currentVolume);
+    break;
+  case CONTROL_SEEK_FORWARD:
+    SeekMusicStream(music, GetMusicTimePlayed(music) + 5);
+    break;
+  case CONTROL_SEEK_BACK: {
+    float current = GetMusicTimePlayed(music);
+    if (current >= 5)
+      SeekMusicStream(music, current - 5);
+    break;
+  }
+  case CONTROL_TOGGLE_VIEW:
+    global_currentViewMode =
+        global_currentViewMode == VIEW_MODE_HORIZONTAL ? VIEWMODE_RADIAL
+                                                       : VIEW_MODE_HORIZONTAL;
+    break;
+  }
+}
+
 static void UpdateDrawFrame(void); // Update and draw one frame
 
 // MARK:- main
@@ -158,6 +214,10 @@ int main(int argc, char *argv[]) {
     startFreshAndPlay(music);
     printf("Music is valid and playing\n");
   }
+
+#if defined(PLATFORM_WEB)
+  GuiSetStyle(DEFAULT, TEXT_SIZE, 20);
+#endif
 
 #if defined(PLATFORM_WEB)
   emscripten_set_main_loop(UpdateDrawFrame, 0, 1);
@@ -206,47 +266,19 @@ static void UpdateDrawFrame(void) {
   float dt = GetFrameTime();
 
   if (IsKeyPressed(KEY_SPACE)) {
-    if (IsMusicStreamPlaying(music)) {
-      PauseMusicStream(music);
-    } else {
-      ResumeMusicStream(music);
-    }
+    handleControlAction(CONTROL_PLAY_PAUSE);
   } else if (IsKeyPressed(KEY_M)) {
-    global_isSoundMuted = !global_isSoundMuted;
-    if (global_isSoundMuted) {
-      SetMusicVolume(music, 0);
-    } else {
-      SetMusicVolume(music, global_currentVolume);
-    }
+    handleControlAction(CONTROL_MUTE);
   } else if (IsKeyPressed(KEY_UP)) {
-    global_currentVolume += .05;
-    SetMusicVolume(music, global_currentVolume);
-    if (global_currentVolume >= .05) {
-      global_isSoundMuted = false;
-    }
+    handleControlAction(CONTROL_VOL_UP);
   } else if (IsKeyPressed(KEY_DOWN)) {
-    global_currentVolume -= .05;
-    SetMusicVolume(music, global_currentVolume);
-    if (global_currentVolume <= .05) {
-      global_isSoundMuted = true;
-    }
+    handleControlAction(CONTROL_VOL_DOWN);
   } else if (IsKeyPressed(KEY_RIGHT)) {
-    float current = GetMusicTimePlayed(music);
-    SeekMusicStream(music, current += 5);
+    handleControlAction(CONTROL_SEEK_FORWARD);
   } else if (IsKeyPressed(KEY_LEFT)) {
-    float current = GetMusicTimePlayed(music);
-    if (current >= 5) {
-      SeekMusicStream(music, current -= 5);
-    }
+    handleControlAction(CONTROL_SEEK_BACK);
   } else if (IsKeyPressed(KEY_L)) {
-    switch (global_currentViewMode) {
-    case VIEW_MODE_HORIZONTAL:
-      global_currentViewMode = VIEWMODE_RADIAL;
-      break;
-    case VIEWMODE_RADIAL:
-      global_currentViewMode = VIEW_MODE_HORIZONTAL;
-      break;
-    }
+    handleControlAction(CONTROL_TOGGLE_VIEW);
   }
 
   BeginDrawing();
@@ -394,6 +426,30 @@ static void UpdateDrawFrame(void) {
   } else {
     DrawText("Drag and drop a music file to start", 10, 10, fontSize, GRAY);
   }
+
+#if defined(PLATFORM_WEB)
+  const float btnH = 30;
+  const float btnW = 140;
+  const float gap = 8;
+  const float startX = 10;
+  const float y = h - btnH - 12;
+  typedef struct {
+    const char *label;
+    ControlAction action;
+  } ControlButton;
+  const ControlButton buttons[] = {
+      {"Play/Pause", CONTROL_PLAY_PAUSE}, {"Mute", CONTROL_MUTE},
+      {"Vol -", CONTROL_VOL_DOWN},         {"Vol +", CONTROL_VOL_UP},
+      {"Seek -", CONTROL_SEEK_BACK},       {"Seek +", CONTROL_SEEK_FORWARD},
+      {"Change View", CONTROL_TOGGLE_VIEW},
+  };
+  for (int i = 0; i < (int)(sizeof(buttons) / sizeof(buttons[0])); i++) {
+    Rectangle r = {startX + i * (btnW + gap), y, btnW, btnH};
+    if (GuiButton(r, buttons[i].label)) {
+      handleControlAction(buttons[i].action);
+    }
+  }
+#endif
 
   // >> END: DRAW PLAYER CONTROLS <<
 

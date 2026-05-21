@@ -9,19 +9,19 @@ FRAMEWORKS = -framework CoreVideo -framework IOKit -framework Cocoa -framework O
 
 WEB_BUILD_DIR = $(BUILD_DIR)/web
 RAYLIB_WEB_PATH = ./raylib-web
-RAYLIB_WEB_FLAGS = $(RAYLIB_WEB_PATH)/lib/libraylib.a -I$(RAYLIB_WEB_PATH)/include
+RAYLIB_WEB_FLAGS = $(RAYLIB_WEB_PATH)/lib/libraylib.a -I$(RAYLIB_WEB_PATH)/include -I$(LOCAL_LIBS_DIR)/raygui/src
 BUILD_WEB_RESOURCES_PATH  ?= $(dir $<)resources@resources
 BUILD_WEB_SHELL       ?= minshell.html
 
-.PHONY: clean build macos
+.PHONY: clean build build-brew build-web build-web-deploy
 
 build:
 	rm -f $(BUILD_DIR)/waview
 	mkdir -p $(BUILD_DIR)
-	gcc -o $(BUILD_DIR)/waview main.c $$(pkg-config --cflags --libs raylib)
+	gcc -o $(BUILD_DIR)/waview main.c $$(pkg-config --cflags --libs raylib) -I$(LOCAL_LIBS_DIR)/raygui/src
 
 build-brew: clean	
-	gcc -o waview main.c $$(/opt/homebrew/bin/pkg-config --cflags --libs raylib)
+	gcc -o waview main.c $$(/opt/homebrew/bin/pkg-config --cflags --libs raylib) -I$(LOCAL_LIBS_DIR)/raygui/src
 
 clean:
 	rm -f $(BUILD_DIR)/waview
