@@ -1,5 +1,7 @@
 APP_NAME = Waview
 BUILD_DIR = build
+LOCAL_LIBS_DIR = ./libs
+
 APP_BUNDLE = $(BUILD_DIR)/$(APP_NAME).app
 CONTENTS = $(APP_BUNDLE)/Contents
 MACOS = $(CONTENTS)/MacOS
